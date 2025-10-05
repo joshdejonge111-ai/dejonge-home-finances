@@ -1,0 +1,20 @@
+
+/* Premium Apple/Asics-inspired styling */
+:root{ --bg:#0b0d12; --surface:rgba(255,255,255,.06); --border:rgba(255,255,255,.12); --ink:#e6e8ee; --muted:#a9b0bd; --accent:#39c27f; --accent2:#0ea5e9; --radius:16px; --shadow:0 12px 40px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.05) }
+@media(prefers-color-scheme:light){ :root{ --bg:#f6f8fb; --surface:#ffffffcc; --border:rgba(0,0,0,.08); --ink:#0b1220; --muted:#5b6474; --shadow:0 14px 40px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.6) } }
+*{ box-sizing:border-box }
+html,body{ margin:0; padding:0; background:linear-gradient(180deg,#0b0d12 0%,#0e1118 60%,#0b0d12 100%); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Arial }
+.wrap{ max-width:1180px; margin:28px auto; padding:0 18px }
+.nav{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 16px; border-radius:var(--radius); background:var(--surface); border:1px solid var(--border); box-shadow:var(--shadow); backdrop-filter:blur(18px) saturate(140%) }
+.brand{ display:flex; align-items:center; gap:10px; font-weight:800; letter-spacing:.3px }
+.dot{ width:12px; height:12px; border-radius:50%; background:linear-gradient(135deg,var(--accent2),var(--accent)); box-shadow:0 0 18px rgba(14,165,233,.55) }
+.card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px; box-shadow:var(--shadow); backdrop-filter:blur(18px) saturate(140%) }
+.grid{ display:grid; gap:18px } @media(min-width:980px){ .grid-2{ grid-template-columns:1fr 1fr } }
+h1{ margin:10px 0 2px; font-size:28px } h2,h3{ margin:6px 0 10px } .muted{ color:var(--muted) }
+.row{ display:flex; gap:12px; align-items:center; flex-wrap:wrap }
+input,select{ width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--border); background:rgba(255,255,255,.03); color:var(--ink); outline:none }
+input:focus,select:focus{ border-color:rgba(14,165,233,.6); box-shadow:0 0 0 4px rgba(14,165,233,.15) }
+button.primary{ background:linear-gradient(135deg,var(--accent2),var(--accent)); color:#fff; font-weight:800; border:none; padding:12px 14px; border-radius:14px; box-shadow:0 10px 25px rgba(14,165,233,.25); cursor:pointer }
+a{ color:#9ac7ff; text-decoration:none }
+table{ width:100%; border-collapse:collapse; font-size:14px } th,td{ padding:8px 10px; border-bottom:1px solid var(--border); text-align:right } th:first-child,td:first-child{text-align:left}
+.badge{ display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; border:1px solid var(--border); background:rgba(255,255,255,.04); color:var(--muted) }

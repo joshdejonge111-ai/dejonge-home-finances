@@ -1,0 +1,18 @@
+
+services:
+  - type: web
+    name: fin-dash
+    env: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn -w 2 -k gthread -b 0.0.0.0:$PORT app_multi:app"
+    autoDeploy: true
+    envVars:
+      - key: FLASK_SECRET_KEY
+        generateValue: true
+      - key: ADMIN_EMAIL
+        value: your@email.com
+      - key: ADMIN_PASSWORD_HASH
+        value: ""  # Fill with Werkzeug hash
+      - key: SCHEDULER_DAILY_HHMM
+        value: "03:00"

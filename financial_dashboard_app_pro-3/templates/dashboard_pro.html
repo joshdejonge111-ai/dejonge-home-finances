@@ -1,0 +1,181 @@
+<!doctype html>
+<html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FinDash Pro — Household</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head><body>
+<div class="wrap">
+  <div class="nav">
+    <div class="brand"><div class="dot"></div> FinDash Pro</div>
+    <div class="row">
+      <a href="/download/csv">Download CSV</a>
+      <a href="/download/milestones.ics">Add Milestones to Calendar (.ics)</a>
+      <a href="/logout">Logout</a>
+    </div>
+  </div>
+
+  <div class="row" style="justify-content:space-between; margin-top:14px;">
+    <div><h1>My 52‑Week Plan</h1><div class="badge" id="milestones"></div></div>
+    <div class="card" style="display:flex; gap:10px; align-items:center;">
+      <div class="muted">Household:</div>
+      <select id="partnerSelect" multiple size="1" style="min-width:220px">
+        {% for u in others %}
+          <option value="{{ u.id }}">{{ u.email }}</option>
+        {% endfor %}
+      </select>
+      <button class="primary" onclick="aggregate()">Combine</button>
+    </div>
+  </div>
+
+  <div class="grid grid-2" style="margin-top:14px;">
+    <div class="card">
+      <h3>Upload Paystubs (CSV / QFX / PDF)</h3>
+      <input id="file" type="file" accept=".csv,.qfx,.ofx,.pdf">
+      <div class="row" style="margin-top:10px;">
+        <button class="primary" onclick="upload()">Upload & Recalculate</button>
+        <span id="uploadmsg" class="badge"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Assumptions</h3>
+      <div class="row">
+        <div style="flex:1"><label>Savings Rate (pre‑raise)</label><input id="ratePre" value="{{ settings.savings_rate_initial*100 }}%"></div>
+        <div style="flex:1"><label>Savings Rate (post‑raise)</label><input id="ratePost" value="{{ settings.savings_rate_after_raise*100 }}%"></div>
+      </div>
+      <div class="row">
+        <div style="flex:1"><label>Raise starts (week #)</label><input id="raiseWeek" value="{{ settings.raise_week }}"></div>
+        <div style="flex:1"><label>Savings Goal</label><input id="savingsGoal" value="{{ settings.savings_goal }}"></div>
+        <div style="flex:1"><label>Debt Balance</label><input id="debtBalance" value="{{ settings.debt_balance }}"></div>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <button class="primary" onclick="recalc()">Recalculate</button>
+        <span id="calcmsg" class="badge"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-2" style="margin-top:14px;">
+    <div class="card"><h3>Savings vs. Debt</h3><canvas id="chartSD"></canvas></div>
+    <div class="card"><h3>Weekly Budget Allocation</h3><canvas id="chartAlloc"></canvas></div>
+  </div>
+
+  <div class="card" style="margin-top:14px;">
+    <h3>Weekly Table</h3>
+    <div style="overflow:auto; max-height:420px;"><table id="tbl"><thead></thead><tbody></tbody></table></div>
+  </div>
+
+  <div class="card" style="margin-top:14px;">
+    <h3>Category Tuning (Upload Bank CSV)</h3>
+    <p class="muted">Upload a bank CSV with columns like: <code>date, amount, description</code>. We'll suggest weekly caps.</p>
+    <input id="bankcsv" type="file" accept=".csv">
+    <div class="row" style="margin-top:10px;">
+      <button class="primary" onclick="tune()">Suggest Budget Caps</button>
+      <span id="tunemsg" class="badge"></span>
+    </div>
+    <div id="tuneout" class="muted" style="margin-top:10px;"></div>
+  </div>
+</div>
+
+<script>
+let plan = [], charts = {};
+async function loadPlan(){ const res = await fetch('/api/plan'); plan = await res.json(); updateMilestones(); render(); }
+function updateMilestones(){
+  const goal = {{ settings.savings_goal|int }};
+  const firstGoal = plan.find(r=> r["Total Savings"] >= goal);
+  const debtFree = plan.find(r=> r["Debt Remaining"] <= 0);
+  const msg = [];
+  if (firstGoal) msg.push('Savings Goal: W'+firstGoal["Week"]);
+  if (debtFree) msg.push('Debt-Free: W'+debtFree["Week"]);
+  document.getElementById('milestones').textContent = msg.join(' • ');
+}
+function render(){
+  const data = plan; const labels = data.map(r => 'W'+r["Week"]);
+  const savings = data.map(r => r["Total Savings"]); const debt = data.map(r => r["Debt Remaining"]);
+  const weeklyAdd = data.map(r => r["Saved This Week"]);
+  const expenses = data.map(r => r["Housing & Utilities"] + r["Variable Spending"]);
+  const ctx1 = document.getElementById('chartSD').getContext('2d'); charts.sd && charts.sd.destroy();
+  charts.sd = new Chart(ctx1, { type:'line', data:{ labels, datasets:[{label:'Savings',data:savings,tension:.25},{label:'Debt',data:debt,tension:.25}] },
+    options:{ plugins:{legend:{labels:{color:'#e6e8ee'}}}, scales:{x:{ticks:{color:'#a9b0bd'}}, y:{ticks:{color:'#a9b0bd'}}}} });
+  const ctx2 = document.getElementById('chartAlloc').getContext('2d'); charts.alloc && charts.alloc.destroy();
+  charts.alloc = new Chart(ctx2, { type:'line', data:{ labels, datasets:[{label:'Expenses',data:expenses,fill:true,tension:.25},{label:'Savings (weekly add)',data:weeklyAdd,fill:true,tension:.25}] },
+    options:{ plugins:{legend:{labels:{color:'#e6e8ee'}}}, scales:{x:{ticks:{color:'#a9b0bd'}}, y:{ticks:{color:'#a9b0bd'}}}} });
+  const thead=document.querySelector('#tbl thead'), tbody=document.querySelector('#tbl tbody');
+  thead.innerHTML='<tr><th>Week</th><th>Net Income</th><th>Savings Rate</th><th>Saved</th><th>Total Savings</th><th>Debt Payment</th><th>Debt Remaining</th><th>Housing+Utils</th><th>Variable</th></tr>';
+  tbody.innerHTML = data.map(r => `<tr>
+    <td>W${r["Week"]}</td><td>${r["Net Income"].toLocaleString()}</td><td>${r["Savings Rate"]}</td>
+    <td>${r["Saved This Week"].toLocaleString()}</td><td>${r["Total Savings"].toLocaleString()}</td>
+    <td>${r["Debt Payment"].toLocaleString()}</td><td>${r["Debt Remaining"].toLocaleString()}</td>
+    <td>${r["Housing & Utilities"].toLocaleString()}</td><td>${r["Variable Spending"].toLocaleString()}</td>
+  </tr>`).join('');
+}
+async function recalc(){
+  const parsePct = v => Math.max(0, Math.min(1, parseFloat(String(v).replace('%','').trim())/100));
+  const payload = {
+    savings_rate_initial: parsePct(document.getElementById('ratePre').value || '25%'),
+    savings_rate_after_raise: parsePct(document.getElementById('ratePost').value || '30%'),
+    raise_week: parseInt(document.getElementById('raiseWeek').value || '13'),
+    savings_goal: parseFloat(document.getElementById('savingsGoal').value || '15000'),
+    debt_balance: parseFloat(document.getElementById('debtBalance').value || '20000')
+  };
+  const res = await fetch('/api/recalc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const out = await res.json(); if(out.ok){ await loadPlan(); document.getElementById('calcmsg').textContent='Recalculated.'; }
+}
+async function upload(){
+  const file = document.getElementById('file').files[0];
+  if (!file){ document.getElementById('uploadmsg').textContent='Choose a file first.'; return; }
+  const fd = new FormData(); fd.append('file', file);
+  const res = await fetch('/api/upload', { method:'POST', body: fd });
+  const out = await res.json();
+  if(out.ok){ await loadPlan(); document.getElementById('uploadmsg').textContent='Paystub applied.'; }
+  else{ document.getElementById('uploadmsg').textContent= out.error || 'Upload failed'; }
+}
+async function aggregate(){
+  const sel = document.getElementById('partnerSelect');
+  const ids = Array.from(sel.selectedOptions).map(o => o.value);
+  const res = await fetch('/api/aggregate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ user_ids: ids }) });
+  const arr = await res.json();
+  if (!arr.length){ return; }
+  // overlay household totals on top of existing chart
+  const labels = arr.map(r=>'W'+r["Week"]);
+  const hs = arr.map(r=>r["Household Savings"]); const hd = arr.map(r=>r["Household Debt"]);
+  // add as additional datasets
+  charts.sd.data.labels = labels;
+  charts.sd.data.datasets.push({label:'Household Savings', data:hs, borderDash:[6,4], tension:.25});
+  charts.sd.data.datasets.push({label:'Household Debt', data:hd, borderDash:[6,4], tension:.25});
+  charts.sd.update();
+}
+async function tune(){
+  const f = document.getElementById('bankcsv').files[0];
+  if(!f){ document.getElementById('tunemsg').textContent='Choose a CSV first.'; return; }
+  const text = await f.text();
+  // quick client-side category heuristics
+  const lines = text.trim().split(/\r?\n/);
+  const hdr = lines[0].split(',').map(s=>s.trim().toLowerCase());
+  const iAmt = hdr.findIndex(h=> h.includes('amount'));
+  const iDesc = hdr.findIndex(h=> h.includes('desc') || h.includes('name'));
+  if (iAmt<0) { document.getElementById('tunemsg').textContent='No amount column found.'; return; }
+  const rows = lines.slice(1).map(line => { const c=line.split(','); return { amt: parseFloat(c[iAmt]||'0'), d:(c[iDesc]||'').toUpperCase() }; });
+  const cats = { Housing:0, Utilities:0, Groceries:0, Transport:0, Dining:0, Subscriptions:0, Health:0, Debt:0, Other:0 };
+  rows.forEach(r=>{
+    if (!isFinite(r.amt) || r.amt>=0) return;
+    const d=r.d;
+    if (/RENT|MORTGAGE/.test(d)) cats.Housing+=-r.amt;
+    else if (/COMED|XCEL|VERIZON|T-MOBILE|AT&T|INTERNET|UTILITY|WATER/.test(d)) cats.Utilities+=-r.amt;
+    else if (/WALMART|TARGET|ALDI|COSTCO|GROCERY|TRADER JOE/.test(d)) cats.Groceries+=-r.amt;
+    else if (/SHELL|EXXON|BP |UBER|LYFT|GAS/.test(d)) cats.Transport+=-r.amt;
+    else if (/STARBUCKS|MCDONALD|CHIPOTLE|PIZZA|RESTAURANT|UBER EATS|DOORDASH|GRUBHUB/.test(d)) cats.Dining+=-r.amt;
+    else if (/NETFLIX|SPOTIFY|HULU|AMAZON PRIME|APPLE\.COM|ADOBE|YOUTUBE/.test(d)) cats.Subscriptions+=-r.amt;
+    else if (/CVS|WALGREENS|PHARMACY|DENTAL|HOSPITAL/.test(d)) cats.Health+=-r.amt;
+    else if (/CREDIT CARD PAYMENT|AMEX|CAPITAL ONE|CHASE|DISCOVER|CITI/.test(d)) cats.Debt+=-r.amt;
+    else cats.Other+=-r.amt;
+  });
+  const weekly = Object.fromEntries(Object.entries(cats).map(([k,v])=>[k, Math.round((v/52))]));
+  const total = Object.values(weekly).reduce((a,b)=>a+b,0);
+  document.getElementById('tuneout').innerHTML = '<b>Suggested Weekly Caps</b><br>'+Object.entries(weekly).map(([k,v])=>`${k}: $${v.toLocaleString()}`).join('<br>')+`<br><br>Total: $${total.toLocaleString()}`;
+  document.getElementById('tunemsg').textContent='Caps generated (client-side heuristic).';
+}
+loadPlan();
+</script>
+</body></html>
